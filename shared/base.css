@@ -1,0 +1,26 @@
+/* 모든 페이지가 함께 쓰는 색상, 기본 스타일, 상단 바 */
+:root {
+  --paper: #f5efe4; --card: #fffaf1; --ink: #2b2620; --muted: #6f6558;
+  --line: #dccfbb; --accent: #c8452d; --accent-dark: #a53520; --tray: #3a3128;
+  --shadow: 0 10px 28px rgba(58, 49, 40, .16);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  min-height: 100dvh; display: flex; flex-direction: column;
+  background: var(--paper); color: var(--ink); word-break: keep-all;
+  font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; background: none; border: 0; padding: 4px; color: inherit; text-decoration: none; font-weight: 800; font-size: 17px; }
+.logo { display: grid; grid-template-columns: repeat(2, 8px); gap: 2px; }
+.logo i { width: 8px; height: 8px; border-radius: 2px; background: var(--ink); }
+.logo i:last-child { background: var(--accent); transform: translateX(3px); }
+.all-games { padding: 8px 4px; color: var(--muted); font-size: 14px; font-weight: 650; text-underline-offset: 3px; }
+.all-games:hover { color: var(--ink); }
