@@ -17,6 +17,10 @@
   .art i { border-radius: 3px; background: linear-gradient(145deg, #d9694b, #f7c56b); }
   .art i:nth-child(2n) { background: linear-gradient(145deg, #33294a, #8c4a54); }
   .art i:nth-child(6) { background: none; }
+  .art.blend { position: relative; display: block; }
+  .art.blend i { position: absolute; top: 18%; width: 34%; height: 64%; border-radius: 6px; }
+  .art.blend i:first-child { left: 24%; background: linear-gradient(145deg, #d9694b, #f7c56b); }
+  .art.blend i:last-child { left: 42%; background: linear-gradient(145deg, #33294a, #8c4a54); opacity: .6; }
   .info { display: block; padding: 16px 18px 18px; }
   .info b { display: block; margin-bottom: 4px; font-size: 19px; }
   .info span { color: var(--muted); font-size: 14px; line-height: 1.5; }
@@ -40,6 +44,12 @@
       <a class="game" href="sliding-puzzle/">
         <span class="art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         <span class="info"><b>슬라이딩 퍼즐</b><span>직접 찍은 사진이나 이미지로 만드는 퍼즐</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="game" href="photo-blend/">
+        <span class="art blend" aria-hidden="true"><i></i><i></i></span>
+        <span class="info"><b>사진 합성 맞히기</b><span>겹쳐진 두 장이 몇 번 사진인지 맞히는 게임</span></span>
       </a>
     </li>
   </ul>

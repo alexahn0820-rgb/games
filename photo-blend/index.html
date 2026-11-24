@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5efe4">
+<title>사진 합성 맞히기</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 20px 28px; display: flex; flex-direction: column; }
+  .screen { flex: 1; display: flex; flex-direction: column; }
+  h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.2; letter-spacing: -.02em; margin: 3vh 0 10px; text-align: center; }
+  .lead { margin: 0 0 22px; color: var(--muted); line-height: 1.6; text-align: center; }
+
+  .btn { min-height: 44px; padding: 9px 18px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font-weight: 650; }
+  .btn:hover { border-color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
+  .link { background: none; border: 0; padding: 8px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* 준비 화면 */
+  .setup { width: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .pick {
+    width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px;
+    background: var(--card); border: 2px dashed var(--line); border-radius: 14px; transition: border-color .15s;
+  }
+  .pick:hover, body.dragging .pick { border-color: var(--accent); }
+  .pick b { font-size: 18px; }
+  .pick span { color: var(--muted); font-size: 14px; }
+  .pick svg { width: 30px; height: 30px; color: var(--accent); margin-bottom: 4px; }
+  .count { margin: 0; color: var(--muted); font-size: 14px; }
+  .thumbs { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .thumbs li { position: relative; }
+  .photo { position: relative; display: block; width: 100%; aspect-ratio: 3 / 4; border-radius: 8px; overflow: hidden; background: var(--tray); }
+  .photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .badge { position: absolute; left: 5px; top: 5px; min-width: 24px; padding: 2px 6px; border-radius: 6px; background: rgba(30,25,20,.8); color: #fff; font-size: 13px; font-weight: 800; text-align: center; }
+  .remove { position: absolute; right: 4px; top: 4px; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 0; background: rgba(30,25,20,.8); color: #fff; font-size: 17px; line-height: 1; }
+  .remove:hover { background: var(--accent); }
+  .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: #e9dfcf; }
+  .seg label { position: relative; }
+  .seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .seg span { display: block; padding: 9px 16px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 700; text-align: center; }
+  .seg input:checked + span { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .seg input:focus-visible + span { outline: 3px solid var(--accent); }
+  .diff-help { margin: -6px 0 0; color: var(--muted); font-size: 13px; text-align: center; }
+
+  /* 게임 화면 */
+  #play { display: grid; grid-template-columns: auto minmax(0, 460px); justify-content: center; align-items: start; gap: 28px; }
+  .stage { width: min(100%, calc((100dvh - 120px) * .75), 440px); padding: 8px; border-radius: 14px; background: var(--tray); box-shadow: var(--shadow); }
+  #blend { display: block; width: 100%; aspect-ratio: 3 / 4; border-radius: 6px; background: #241e18; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .hud { display: flex; gap: 8px; }
+  .hud div { flex: 1; padding: 8px 12px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+  .hud small { display: block; color: var(--muted); font-size: 12px; }
+  .hud b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .prompt { margin: 0; min-height: 26px; font-weight: 700; }
+  .prompt.good { color: #2f7a3f; }
+  .prompt.bad { color: var(--accent-dark); }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
+  .choice { padding: 0; border: 0; border-radius: 9px; background: none; }
+  .choice .photo { box-shadow: 0 0 0 2px transparent; transition: box-shadow .12s, transform .12s; }
+  .choice[aria-pressed="true"] .photo { box-shadow: 0 0 0 4px var(--ink); transform: scale(.95); }
+  .choice[aria-pressed="true"] .badge { background: var(--ink); }
+  .choice.correct .photo { box-shadow: 0 0 0 4px #2f7a3f; transform: none; }
+  .choice.correct .badge { background: #2f7a3f; }
+  .choice.wrong .photo { box-shadow: 0 0 0 4px var(--accent); transform: none; opacity: .75; }
+  .choice.wrong .badge { background: var(--accent); }
+  .choice:disabled { cursor: default; }
+  .action { position: sticky; bottom: 0; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); background: var(--paper); }
+  .action .btn { width: 100%; }
+
+  /* 결과 화면 */
+  .result { width: 100%; max-width: 720px; margin: 0 auto; text-align: center; }
+  .score { font-size: clamp(48px, 12vw, 72px); font-weight: 800; line-height: 1; margin: 4vh 0 10px; }
+  .score small { font-size: .45em; color: var(--muted); }
+  .summary { margin: 0 0 6px; color: var(--muted); line-height: 1.6; }
+  .record { margin: 0 0 22px; color: var(--accent-dark); font-weight: 700; min-height: 1.5em; }
+  .review { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 26px 0 0; padding: 0; list-style: none; text-align: left; }
+  .review li { padding: 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; }
+  .review img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
+  .review .ok { color: #2f7a3f; font-weight: 800; }
+  .review .no { color: var(--accent-dark); font-weight: 800; }
+  .review span { color: var(--muted); }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; width: max-content; max-width: 90vw; padding: 12px 18px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 14px; line-height: 1.5; }
+
+  @media (max-width: 800px) {
+    #play { grid-template-columns: 1fr; justify-items: center; gap: 12px; }
+    .stage { width: min(100%, calc(36dvh * .75)); padding: 5px; }
+    .side { width: 100%; max-width: 520px; }
+    .hud b { font-size: 17px; }
+    .choices { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">
+    <span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>사진 합성 맞히기
+  </a>
+  <a class="all-games" href="../">전체 게임</a>
+</header>
+
+<main>
+  <section class="screen" id="setup">
+    <div class="setup">
+      <h1>어떤 두 장이<br>섞였을까?</h1>
+      <p class="lead">사진을 4~12장 올리면 두 장씩 겹쳐 문제를 냅니다.<br>사진은 이 기기 밖으로 전송되지 않습니다.</p>
+      <button class="pick" id="pickBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 18 5-5 3.5 3.5L16 13l4 4"/></svg>
+        <b>사진 고르기</b><span>여러 장을 한 번에 고를 수 있습니다</span>
+      </button>
+      <p class="count" id="count" role="status"></p>
+      <ul class="thumbs" id="thumbs"></ul>
+      <div class="seg" role="radiogroup" aria-label="난이도">
+        <label><input type="radio" name="diff" value="easy" checked><span>쉬움</span></label>
+        <label><input type="radio" name="diff" value="hard"><span>어려움</span></label>
+      </div>
+      <p class="diff-help" id="diffHelp"></p>
+      <div class="row">
+        <button class="btn primary" id="startBtn" disabled>게임 시작</button>
+      </div>
+      <button class="link" id="sampleBtn">예제 사진으로 해보기</button>
+    </div>
+  </section>
+
+  <section class="screen" id="play" hidden>
+    <div class="stage"><canvas id="blend" width="600" height="800" aria-label="두 장의 사진을 겹친 문제 이미지"></canvas></div>
+    <div class="side">
+      <div class="hud">
+        <div><small>문제</small><b id="round">1 / 10</b></div>
+        <div><small>점수</small><b id="score">0</b></div>
+        <div><small>시간</small><b id="time">00:00</b></div>
+      </div>
+      <p class="prompt" id="prompt" role="status"></p>
+      <div class="choices" id="choices" role="group" aria-label="사진 고르기"></div>
+      <div class="action"><button class="btn primary" id="actionBtn" disabled>확인</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="result" hidden>
+    <div class="result">
+      <p class="score" id="finalScore"></p>
+      <p class="summary" id="summary"></p>
+      <p class="record" id="record"></p>
+      <div class="row">
+        <button class="btn" id="changeBtn">사진 바꾸기</button>
+        <button class="btn primary" id="againBtn">같은 사진으로 다시</button>
+      </div>
+      <ul class="review" id="review" aria-label="문제별 결과"></ul>
+    </div>
+  </section>
+</main>
+
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+<div id="toast" role="alert" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const MIN = 4, MAX = 12, ROUNDS = 10, W = 600, H = 800, TW = 240, TH = 320;
+  const DIFF_HELP = {
+    easy: '두 사진을 똑같은 비율로 겹칩니다.',
+    hard: '한 사진을 훨씬 흐리게 겹쳐서 찾기 어렵습니다.'
+  };
+
+  const photos = [];          // { canvas, url, key }
+  let loading = false, toastTimer;
+  const game = { rounds: [], index: 0, score: 0, partial: 0, picks: [], answered: false, started: 0, timer: null, history: [], diff: 'easy' };
+
+  function show(name) {
+    ['setup', 'play', 'result'].forEach(s => { $(s).hidden = s !== name; });
+    if (name !== 'play') stopTimer();
+    $('toast').hidden = true;
+    window.scrollTo(0, 0);
+  }
+
+  function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, 5000);
+  }
+
+  function randomInt(max) {
+    const limit = Math.floor(0x100000000 / max) * max, buf = new Uint32Array(1);
+    do crypto.getRandomValues(buf); while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+  function shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  }
+  const formatTime = ms => {
+    const t = Math.floor(ms / 1000);
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
+
+  /* ---------- 사진 불러오기 ---------- */
+  // 사진을 가운데 기준 3:4로 잘라 작은 캔버스에 담는다. 원본 크기 그대로 두지 않아 메모리를 아낀다.
+  function coverDraw(ctx, img, iw, ih, w, h) {
+    const scale = Math.max(w / iw, h / ih), sw = w / scale, sh = h / scale;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, w, h);
+  }
+
+  function decodeFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        img.onload = img.onerror = null;
+        URL.revokeObjectURL(url);
+        if (!img.naturalWidth) { reject(new Error('empty')); return; }
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        try { coverDraw(c.getContext('2d'), img, img.naturalWidth, img.naturalHeight, W, H); }
+        catch (err) { reject(err); return; }
+        resolve(c);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+
+  function thumbUrl(canvas) {
+    const t = document.createElement('canvas');
+    t.width = TW; t.height = TH;
+    coverDraw(t.getContext('2d'), canvas, W, H, TW, TH);
+    return new Promise(resolve => t.toBlob(b => resolve(b ? URL.createObjectURL(b) : t.toDataURL()), 'image/jpeg', .85));
+  }
+
+  async function addPhoto(canvas, key) {
+    photos.push({ canvas, key, url: await thumbUrl(canvas) });
+  }
+
+  async function addFiles(fileList) {
+    if (loading) return;
+    const files = [...fileList];
+    if (!files.length) return;
+    loading = true;
+    const failed = [];
+    let skipped = 0, duplicate = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (photos.length >= MAX) { skipped = files.length - i; break; }
+      const key = `${f.name}|${f.size}|${f.lastModified}`;
+      if (photos.some(p => p.key === key)) { duplicate++; continue; }
+      $('count').textContent = `불러오는 중 ${i + 1} / ${files.length}`;
+      try { await addPhoto(await decodeFile(f), key); }
+      catch { failed.push(f.name || `${i + 1}번째 파일`); }
+      renderThumbs();
+    }
+    loading = false;
+    renderThumbs();
+    const notes = [];
+    if (failed.length) notes.push(`열 수 없는 사진 ${failed.length}장은 뺐습니다(${failed.slice(0, 3).join(', ')}${failed.length > 3 ? ' 등' : ''}). HEIC라면 JPG로 바꿔 올려 주세요.`);
+    if (skipped) notes.push(`최대 ${MAX}장까지라서 ${skipped}장은 넣지 않았습니다.`);
+    if (duplicate) notes.push(`이미 넣은 사진 ${duplicate}장은 건너뛰었습니다.`);
+    if (notes.length) toast(notes.join(' '));
+  }
+
+  function removePhoto(i) {
+    const [p] = photos.splice(i, 1);
+    if (p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
+    renderThumbs();
+  }
+
+  function renderThumbs() {
+    const list = $('thumbs');
+    list.textContent = '';
+    photos.forEach((p, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="photo"><img alt="${i + 1}번 사진"><span class="badge">${i + 1}</span></span>
+        <button class="remove" aria-label="${i + 1}번 사진 빼기">×</button>`;
+      li.querySelector('img').src = p.url;
+      li.querySelector('.remove').onclick = () => removePhoto(i);
+      list.append(li);
+    });
+    const n = photos.length;
+    if (!loading) {
+      $('count').textContent = n === 0 ? `사진 ${MIN}~${MAX}장이 필요합니다. 서로 다른 장면일수록 재미있어요.`
+        : n < MIN ? `${n}장 골랐습니다. ${MIN - n}장 더 필요합니다.`
+        : `${n}장으로 문제 ${Math.min(ROUNDS, n * (n - 1) / 2)}개를 냅니다.${n < MAX ? ` ${MAX - n}장 더 넣을 수 있습니다.` : ''}`;
+    }
+    $('pickBtn').disabled = n >= MAX;
+    $('startBtn').disabled = loading || n < MIN;
+  }
+
+  // 업로드 없이 해볼 수 있도록 서로 다른 그림 6장을 만든다.
+  function sampleCanvas(k) {
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const palettes = [['#1d4e89', '#f4d35e'], ['#2a9d8f', '#e76f51'], ['#6a4c93', '#ffca3a'], ['#d62828', '#fcbf49'], ['#264653', '#e9c46a'], ['#ff6b6b', '#4ecdc4']];
+    const [a, b] = palettes[k];
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, a); g.addColorStop(1, '#111');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = b; x.strokeStyle = b; x.lineWidth = 34;
+    x.beginPath();
+    if (k === 0) { x.arc(300, 330, 190, 0, Math.PI * 2); x.fill(); }
+    else if (k === 1) { for (let i = 0; i < 6; i++) x.fillRect(0, 60 + i * 130, W, 55); }
+    else if (k === 2) { x.moveTo(300, 120); x.lineTo(560, 640); x.lineTo(40, 640); x.closePath(); x.fill(); }
+    else if (k === 3) { for (let i = 0; i < 5; i++) x.fillRect(40 + i * 120, 0, 50, H); }
+    else if (k === 4) { x.moveTo(-40, 700); for (let px = 0; px <= W + 40; px += 20) x.lineTo(px, 420 + Math.sin(px / 60) * 120); x.lineTo(W, H); x.lineTo(0, H); x.fill(); x.beginPath(); x.arc(450, 180, 80, 0, Math.PI * 2); x.fill(); }
+    else { x.arc(300, 400, 220, 0, Math.PI * 2); x.stroke(); x.beginPath(); x.arc(300, 400, 110, 0, Math.PI * 2); x.stroke(); }
+    return c;
+  }
+  async function loadSamples() {
+    if (loading) return;
+    loading = true;
+    photos.splice(0).forEach(p => p.url.startsWith('blob:') && URL.revokeObjectURL(p.url));
+    for (let k = 0; k < 6; k++) await addPhoto(sampleCanvas(k), `sample-${k}`);
+    loading = false;
+    renderThumbs();
+  }
+
+  /* ---------- 게임 진행 ---------- */
+  const blendCtx = $('blend').getContext('2d');
+
+  function startGame() {
+    const n = photos.length;
+    if (n < MIN) return;
+    game.diff = document.querySelector('input[name="diff"]:checked').value;
+    const pairs = [];
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) pairs.push(randomInt(2) ? [a, b] : [b, a]);
+    game.rounds = shuffle(pairs).slice(0, ROUNDS).map(([a, b]) => ({
+      a, b,
+      // a 사진의 비중. 어려움에서는 b가 25~35%로 흐리게 섞인다.
+      w: game.diff === 'easy' ? .5 : .65 + Math.random() * .1
+    }));
+    Object.assign(game, { index: 0, score: 0, partial: 0, history: [], elapsed: 0 });
+    buildChoices();
+    show('play');
+    game.started = performance.now();
+    stopTimer();
+    game.timer = setInterval(updateHud, 500);
+    showRound();
+  }
+
+  function buildChoices() {
+    const box = $('choices');
+    box.textContent = '';
+    photos.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.className = 'choice';
+      b.dataset.index = i;
+      b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('aria-label', `${i + 1}번 사진`);
+      b.innerHTML = `<span class="photo"><img alt=""><span class="badge">${i + 1}</span></span>`;
+      b.querySelector('img').src = p.url;
+      b.onclick = () => toggleChoice(i);
+      box.append(b);
+    });
+  }
+
+  function drawBlend(ctx, round) {
+    const { width, height } = ctx.canvas;
+    ctx.globalAlpha = 1;
+    ctx.drawImage(photos[round.a].canvas, 0, 0, width, height);
+    ctx.globalAlpha = 1 - round.w;
+    ctx.drawImage(photos[round.b].canvas, 0, 0, width, height);
+    ctx.globalAlpha = 1;
+  }
+
+  function showRound() {
+    const round = game.rounds[game.index];
+    drawBlend(blendCtx, round);
+    game.picks = [];
+    game.answered = false;
+    document.querySelectorAll('.choice').forEach(b => {
+      b.disabled = false;
+      b.classList.remove('correct', 'wrong');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    $('prompt').className = 'prompt';
+    $('prompt').textContent = '섞인 두 장을 골라 주세요.';
+    $('actionBtn').textContent = '확인';
+    $('actionBtn').disabled = true;
+    updateHud();
+  }
+
+  function toggleChoice(i) {
+    if (game.answered) return;
+    const at = game.picks.indexOf(i);
+    if (at >= 0) game.picks.splice(at, 1);
+    else {
+      if (game.picks.length === 2) game.picks.shift();
+      game.picks.push(i);
+    }
+    document.querySelectorAll('.choice').forEach(b => {
+      b.setAttribute('aria-pressed', String(game.picks.includes(Number(b.dataset.index))));
+    });
+    $('actionBtn').disabled = game.picks.length !== 2;
+  }
+
+  function answer() {
+    const round = game.rounds[game.index], truth = [round.a, round.b];
+    const hits = game.picks.filter(p => truth.includes(p)).length;
+    game.answered = true;
+    if (hits === 2) game.score++;
+    else if (hits === 1) game.partial++;
+    document.querySelectorAll('.choice').forEach(b => {
+      const i = Number(b.dataset.index);
+      b.disabled = true;
+      if (truth.includes(i)) b.classList.add('correct');
+      else if (game.picks.includes(i)) b.classList.add('wrong');
+    });
+    const names = list => [...list].sort((x, y) => x - y).map(i => `${i + 1}번`).join('과 ');
+    $('prompt').className = 'prompt ' + (hits === 2 ? 'good' : 'bad');
+    $('prompt').textContent = hits === 2 ? `정답! ${names(truth)}입니다.`
+      : `${hits === 1 ? '한 장만 맞았어요.' : '아쉬워요.'} 정답은 ${names(truth)}입니다.`;
+    const small = document.createElement('canvas');
+    small.width = 150; small.height = 200;
+    drawBlend(small.getContext('2d'), round);
+    game.history.push({ img: small.toDataURL('image/jpeg', .75), truth: names(truth), picks: names(game.picks), hits });
+    const last = game.index === game.rounds.length - 1;
+    $('actionBtn').textContent = last ? '결과 보기' : '다음 문제';
+    $('actionBtn').disabled = false;
+    updateHud();
+    $('actionBtn').focus();
+  }
+
+  function next() {
+    if (game.index === game.rounds.length - 1) { finish(); return; }
+    game.index++;
+    showRound();
+    window.scrollTo(0, 0);
+  }
+
+  function updateHud() {
+    $('round').textContent = `${game.index + 1} / ${game.rounds.length}`;
+    $('score').textContent = game.score;
+    $('time').textContent = formatTime(performance.now() - game.started);
+  }
+  function stopTimer() { clearInterval(game.timer); game.timer = null; }
+
+  function readBest(diff) {
+    try { return JSON.parse(localStorage.getItem(`photo-blend-best-${diff}`)) || null; }
+    catch { return null; }
+  }
+
+  function finish() {
+    const time = performance.now() - game.started, total = game.rounds.length;
+    stopTimer();
+    const old = readBest(game.diff);
+    const rate = game.score / total;
+    const better = !old || rate > old.score / old.total || (rate === old.score / old.total && time < old.time);
+    if (better) {
+      try { localStorage.setItem(`photo-blend-best-${game.diff}`, JSON.stringify({ score: game.score, total, time })); } catch { /* 저장 불가 환경 */ }
+    }
+    const label = game.diff === 'easy' ? '쉬움' : '어려움';
+    $('finalScore').innerHTML = `${game.score}<small> / ${total}</small>`;
+    $('summary').textContent = `${label} · ${formatTime(time)}${game.partial ? ` · 한 장만 맞힌 문제 ${game.partial}개` : ''}`;
+    $('record').textContent = better ? `${label} 새 최고 기록입니다`
+      : `${label} 최고 기록: ${old.score} / ${old.total}, ${formatTime(old.time)}`;
+    const review = $('review');
+    review.textContent = '';
+    game.history.forEach((h, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<img alt="${i + 1}번 문제 이미지"><b class="${h.hits === 2 ? 'ok' : 'no'}"></b><br><span></span>`;
+      li.querySelector('img').src = h.img;
+      li.querySelector('b').textContent = `${i + 1}. ${h.hits === 2 ? '정답' : '오답'}`;
+      li.querySelector('span').textContent = h.hits === 2 ? h.truth : `정답 ${h.truth} · 내 답 ${h.picks}`;
+      review.append(li);
+    });
+    show('result');
+  }
+
+  /* ---------- 이벤트 ---------- */
+  $('pickBtn').onclick = () => $('fileInput').click();
+  $('fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+  $('sampleBtn').onclick = loadSamples;
+  $('startBtn').onclick = startGame;
+  $('actionBtn').onclick = () => (game.answered ? next() : answer());
+  $('againBtn').onclick = startGame;
+  $('changeBtn').onclick = () => show('setup');
+  document.querySelectorAll('input[name="diff"]').forEach(r => r.addEventListener('change', () => { $('diffHelp').textContent = DIFF_HELP[r.value]; }));
+  $('diffHelp').textContent = DIFF_HELP.easy;
+
+  let dragDepth = 0;
+  const onSetup = () => !$('setup').hidden;
+  addEventListener('dragenter', e => { e.preventDefault(); if (onSetup()) { dragDepth++; document.body.classList.add('dragging'); } });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+  addEventListener('drop', e => {
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove('dragging');
+    if (onSetup()) addFiles(e.dataTransfer.files);
+  });
+
+  renderThumbs();
+})();
+</script>
+</body>
+</html>
