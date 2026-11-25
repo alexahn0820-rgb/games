@@ -21,6 +21,9 @@
   .art.blend i { position: absolute; top: 18%; width: 34%; height: 64%; border-radius: 6px; }
   .art.blend i:first-child { left: 24%; background: linear-gradient(145deg, #d9694b, #f7c56b); }
   .art.blend i:last-child { left: 42%; background: linear-gradient(145deg, #33294a, #8c4a54); opacity: .6; }
+  .art.hunt { position: relative; display: block; background: linear-gradient(160deg, #5aa7d8 0%, #f3d7a7 55%, #3a3128 56%); }
+  .art.hunt i:first-child { position: absolute; left: 22%; top: 46%; width: 9%; height: 13%; border: 3px solid #4cd964; border-radius: 3px; background: none; }
+  .art.hunt i:last-child { position: absolute; right: 12%; top: 14%; width: 34%; height: 54%; border: 4px solid #fffaf1; border-radius: 6px; background: repeating-linear-gradient(90deg, #c8452d 0 18%, #ffe9a8 18% 30%); box-shadow: 0 6px 16px rgba(0,0,0,.35); }
   .info { display: block; padding: 16px 18px 18px; }
   .info b { display: block; margin-bottom: 4px; font-size: 19px; }
   .info span { color: var(--muted); font-size: 14px; line-height: 1.5; }
@@ -50,6 +53,12 @@
       <a class="game" href="photo-blend/">
         <span class="art blend" aria-hidden="true"><i></i><i></i></span>
         <span class="info"><b>사진 합성 맞히기</b><span>겹쳐진 두 장이 몇 번 사진인지 맞히는 게임</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="game" href="zoom-hunt/">
+        <span class="art hunt" aria-hidden="true"><i></i><i></i></span>
+        <span class="info"><b>확대 조각 위치 찾기</b><span>크게 확대한 작은 조각이 사진 어디에 있는지 찾는 게임</span></span>
       </a>
     </li>
   </ul>

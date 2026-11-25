@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5efe4">
+<title>확대 조각 위치 찾기</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  main { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 8px 20px 24px; display: flex; flex-direction: column; }
+  .screen { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  h1 { font-size: clamp(28px, 6vw, 46px); line-height: 1.2; letter-spacing: -.02em; margin: 5vh 0 12px; text-align: center; }
+  h2 { font-size: 22px; margin: 4px 0 14px; text-align: center; }
+  .lead { margin: 0 0 28px; color: var(--muted); line-height: 1.6; text-align: center; }
+
+  .btn { min-height: 44px; padding: 9px 18px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font-weight: 650; }
+  .btn:hover { border-color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
+  .link { margin-top: 18px; background: none; border: 0; padding: 8px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+
+  .sources { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 640px; }
+  .source { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 160px; padding: 22px; text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; transition: transform .15s, border-color .15s, box-shadow .15s; }
+  .source:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow); }
+  .source svg { width: 32px; height: 32px; margin-bottom: auto; color: var(--accent); }
+  .source b { font-size: 19px; }
+  .source span { color: var(--muted); font-size: 14px; }
+  body.dragging main { outline: 3px dashed var(--accent); outline-offset: -8px; border-radius: 16px; }
+
+  /* 카메라 */
+  .cam { width: min(100%, 520px, calc((100dvh - 270px) * 4 / 3)); min-width: 240px; aspect-ratio: 4 / 3; position: relative; overflow: hidden; margin-bottom: 16px; border-radius: 12px; background: var(--tray); box-shadow: var(--shadow); }
+  .cam video { display: block; width: 100%; height: 100%; object-fit: cover; }
+  #video.mirror { transform: scaleX(-1); }
+  .camera-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; color: #f5efe4; line-height: 1.6; }
+  .shutter { width: 68px; height: 68px; padding: 0; border-radius: 50%; background: var(--accent); border: 4px solid var(--card); box-shadow: 0 0 0 2px var(--accent); }
+  .shutter:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* 게임 */
+  #play { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: "side viewer"; align-items: start; gap: 24px; width: 100%; }
+  .side { grid-area: side; display: flex; flex-direction: column; gap: 12px; }
+  .hud { display: flex; gap: 8px; }
+  .hud div { flex: 1; padding: 8px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+  .hud small { display: block; color: var(--muted); font-size: 12px; }
+  .hud b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  .frag-row { display: flex; flex-direction: column; gap: 10px; }
+  .frag { position: relative; padding: 6px; border-radius: 12px; background: var(--tray); box-shadow: var(--shadow); }
+  #frag { display: block; width: 100%; aspect-ratio: 1; border-radius: 6px; background: #241e18; }
+  .zoom-tag { position: absolute; right: 12px; bottom: 12px; padding: 2px 8px; border-radius: 6px; background: rgba(30,25,20,.8); color: #fff; font-size: 12px; font-weight: 700; }
+  .frag-info { display: flex; flex-direction: column; gap: 10px; }
+  .prompt { margin: 0; min-height: 44px; font-weight: 700; line-height: 1.5; }
+  .prompt.good { color: #2f7a3f; }
+  .prompt.bad { color: var(--accent-dark); }
+  .viewer { grid-area: viewer; position: relative; height: calc(100dvh - 110px); min-height: 320px; overflow: hidden; border-radius: 12px; background: var(--tray); box-shadow: var(--shadow); }
+  #view { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  #view.panning { cursor: grabbing; }
+  .zoom-ctl { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .zoom-ctl button { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 9px; background: rgba(255,250,241,.92); color: var(--ink); font-size: 20px; font-weight: 800; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+  .zoom-ctl button:hover { background: #fff; }
+  .view-help { position: absolute; left: 10px; bottom: 10px; padding: 4px 10px; border-radius: 8px; background: rgba(30,25,20,.75); color: #fff; font-size: 12px; pointer-events: none; }
+  .action { display: flex; gap: 8px; }
+  .action .btn { flex: 1; }
+
+  /* 결과 */
+  .result { width: 100%; max-width: 760px; text-align: center; }
+  .score { font-size: clamp(48px, 12vw, 72px); font-weight: 800; line-height: 1; margin: 3vh 0 10px; }
+  .score small { font-size: .45em; color: var(--muted); }
+  .summary { margin: 0 0 6px; color: var(--muted); line-height: 1.6; }
+  .record { margin: 0 0 18px; min-height: 1.5em; color: var(--accent-dark); font-weight: 700; }
+  #map { display: block; max-width: 100%; max-height: 56dvh; margin: 22px auto 14px; border-radius: 10px; box-shadow: var(--shadow); }
+  .review { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .review img { display: block; width: 100%; aspect-ratio: 1; border-radius: 8px; margin-bottom: 4px; }
+  .review .ok { color: #2f7a3f; font-weight: 800; }
+  .review .no { color: var(--accent-dark); font-weight: 800; }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; width: max-content; max-width: 90vw; padding: 12px 18px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 14px; line-height: 1.5; }
+
+  @media (max-width: 800px) {
+    main { padding: 4px 12px 0; }
+    #play { grid-template-columns: 1fr; grid-template-areas: "side" "viewer"; gap: 10px; }
+    .side { display: contents; }
+    .hud { order: 1; } .frag-row { order: 2; } .viewer { order: 3; } .action { order: 4; }
+    .hud b { font-size: 16px; } .hud div { padding: 5px 10px; }
+    .frag-row { flex-direction: row; align-items: stretch; gap: 10px; }
+    .frag { width: min(38vw, 22dvh); flex: none; padding: 4px; }
+    .frag-info { flex: 1; justify-content: space-between; }
+    .prompt { font-size: 14px; min-height: 0; }
+    .viewer { height: auto; min-height: 220px; flex: 1; }
+    #play { display: flex; flex-direction: column; align-items: stretch; flex: 1; height: calc(100dvh - 76px); }
+    .action { position: sticky; bottom: 0; padding: 8px 0 calc(10px + env(safe-area-inset-bottom)); background: var(--paper); }
+    .review { grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; }
+  }
+  @media (max-width: 480px) {
+    .sources { grid-template-columns: 1fr; } .source { min-height: 120px; padding: 18px; }
+    h1 { margin-top: 2vh; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">
+    <span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>확대 조각 위치 찾기
+  </a>
+  <a class="all-games" href="../">전체 게임</a>
+</header>
+
+<main>
+  <section class="screen" id="setup">
+    <h1>이 조각,<br>어디에 있을까?</h1>
+    <p class="lead">사진 한 장에서 아주 작은 부분 5곳을 크게 확대해 보여 줍니다.<br>사진은 이 기기 밖으로 전송되지 않습니다.</p>
+    <div class="sources">
+      <button class="source" id="openCamera">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>
+        <b>카메라로 촬영</b><span>웹캠이나 휴대폰 카메라</span>
+      </button>
+      <button class="source" id="openFile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 18 5-5 3.5 3.5L16 13l4 4"/></svg>
+        <b>사진 불러오기</b><span>무늬와 물건이 많은 사진일수록 좋아요</span>
+      </button>
+    </div>
+    <button class="link" id="sampleBtn">예제 그림으로 해보기</button>
+  </section>
+
+  <section class="screen" id="camera" hidden>
+    <h2>찾기 게임에 쓸 장면을 찍어 주세요</h2>
+    <div class="cam">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="camera-msg" id="cameraMsg" role="status"></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="cameraBack">뒤로</button>
+      <button class="shutter" id="shutter" aria-label="촬영" disabled></button>
+      <button class="btn" id="switchCamera" hidden>카메라 전환</button>
+    </div>
+  </section>
+
+  <section class="screen" id="play" hidden>
+    <div class="side">
+      <div class="hud">
+        <div><small>문제</small><b id="round">1 / 5</b></div>
+        <div><small>점수</small><b id="score">0</b></div>
+        <div><small>시간</small><b id="time">00:00</b></div>
+      </div>
+      <div class="frag-row">
+        <div class="frag">
+          <canvas id="frag" width="480" height="480" aria-label="확대한 사진 조각"></canvas>
+          <span class="zoom-tag" id="zoomTag"></span>
+        </div>
+        <div class="frag-info">
+          <p class="prompt" id="prompt" role="status"></p>
+          <button class="btn" id="hintBtn">힌트</button>
+        </div>
+      </div>
+      <div class="action"><button class="btn primary" id="actionBtn" disabled>확인</button></div>
+    </div>
+    <div class="viewer" id="viewer">
+      <canvas id="view" aria-label="원본 사진. 조각이 있는 곳을 누르세요. 두 손가락이나 휠로 확대할 수 있습니다."></canvas>
+      <div class="zoom-ctl">
+        <button id="zoomIn" aria-label="확대">+</button>
+        <button id="zoomOut" aria-label="축소">−</button>
+        <button id="zoomFit" aria-label="전체 보기">⤢</button>
+      </div>
+      <span class="view-help" id="viewHelp">누르면 표시 · 끌어서 이동 · 확대 가능</span>
+    </div>
+  </section>
+
+  <section class="screen" id="result" hidden>
+    <div class="result">
+      <p class="score" id="finalScore"></p>
+      <p class="summary" id="summary"></p>
+      <p class="record" id="record"></p>
+      <div class="row">
+        <button class="btn" id="newPhotoBtn">다른 사진</button>
+        <button class="btn primary" id="againBtn">같은 사진으로 다시</button>
+      </div>
+      <canvas id="map" aria-label="원본 사진 위 정답 위치"></canvas>
+      <ul class="review" id="review" aria-label="문제별 결과"></ul>
+    </div>
+  </section>
+</main>
+
+<input type="file" id="fileInput" accept="image/*" hidden>
+<input type="file" id="captureInput" accept="image/*" capture="environment" hidden>
+<div id="toast" role="alert" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const ROUNDS = 5, MAX_SIDE = 2048, FRAG_RATIO = .08, HINTS = 2;
+  const screens = ['setup', 'camera', 'play', 'result'];
+  let current = 'setup', toastTimer, image = null, analysis = null;
+
+  function show(name) {
+    if (current === 'camera' && name !== 'camera') stopCamera();
+    if (name !== 'play') stopTimer();
+    $('toast').hidden = true;
+    current = name;
+    screens.forEach(s => { $(s).hidden = s !== name; });
+    window.scrollTo(0, 0);
+    if (name === 'play') resizeView();
+  }
+  function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, 4500);
+  }
+  function randomInt(max) {
+    const limit = Math.floor(0x100000000 / max) * max, buf = new Uint32Array(1);
+    do crypto.getRandomValues(buf); while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+  const formatTime = ms => {
+    const t = Math.floor(ms / 1000);
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
+
+  /* ---------- 이미지 준비 ---------- */
+  function toCanvas(src, w, h, mirror = false) {
+    const ratio = Math.min(1, MAX_SIDE / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * ratio); c.height = Math.round(h * ratio);
+    const ctx = c.getContext('2d');
+    if (mirror) { ctx.translate(c.width, 0); ctx.scale(-1, 1); }
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith('image/')) { toast('이미지 파일만 사용할 수 있습니다.'); return; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      img.onload = img.onerror = null;
+      URL.revokeObjectURL(url);
+      if (!img.naturalWidth) { toast('이미지 크기를 읽을 수 없습니다.'); return; }
+      useImage(toCanvas(img, img.naturalWidth, img.naturalHeight));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('이 브라우저에서 열 수 없는 이미지입니다. JPG나 PNG로 시도해 주세요.'); };
+    img.src = url;
+  }
+
+  function useImage(canvas) {
+    if (Math.min(canvas.width, canvas.height) < 240) { toast('사진이 너무 작습니다. 짧은 변이 240픽셀 이상인 사진을 써 주세요.'); return; }
+    image = canvas;
+    analysis = analyze(canvas);
+    startGame();
+  }
+
+  // 작게 줄인 흑백 사진에서 칸마다 무늬가 얼마나 많은지 점수를 매긴다.
+  function analyze(img) {
+    const A = 256, k = A / Math.max(img.width, img.height);
+    const w = Math.max(8, Math.round(img.width * k)), h = Math.max(8, Math.round(img.height * k));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const px = ctx.getImageData(0, 0, w, h).data;
+    const lum = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) lum[i] = .299 * px[i * 4] + .587 * px[i * 4 + 1] + .114 * px[i * 4 + 2];
+    // 적분 영상으로 사각형 합을 빠르게 구한다.
+    const W1 = w + 1, G = new Float64Array(W1 * (h + 1)), L = new Float64Array(W1 * (h + 1)), L2 = new Float64Array(W1 * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let g = 0, l = 0, l2 = 0;
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x, v = lum[i];
+        const gx = x < w - 1 ? Math.abs(lum[i + 1] - v) : 0, gy = y < h - 1 ? Math.abs(lum[i + w] - v) : 0;
+        g += gx + gy; l += v; l2 += v * v;
+        const o = (y + 1) * W1 + x + 1;
+        G[o] = G[o - W1] + g; L[o] = L[o - W1] + l; L2[o] = L2[o - W1] + l2;
+      }
+    }
+    const sum = (T, x0, y0, x1, y1) => T[y1 * W1 + x1] - T[y0 * W1 + x1] - T[y1 * W1 + x0] + T[y0 * W1 + x0];
+    const size = Math.round(Math.min(img.width, img.height) * FRAG_RATIO);
+    const s = Math.max(3, Math.round(size * k)), step = Math.max(1, Math.round(s / 3));
+    const cells = [];
+    for (let y = 0; y + s <= h; y += step) {
+      for (let x = 0; x + s <= w; x += step) {
+        const n = s * s, mean = sum(L, x, y, x + s, y + s) / n;
+        const std = Math.sqrt(Math.max(0, sum(L2, x, y, x + s, y + s) / n - mean * mean));
+        cells.push({ cx: (x + s / 2) / k, cy: (y + s / 2) / k, score: sum(G, x, y, x + s, y + s) / n + std * .5 });
+      }
+    }
+    cells.sort((a, b) => b.score - a.score);
+    return { size, cells };
+  }
+
+  // 무늬가 많은 칸 중에서 서로 떨어진 5곳을 무작위로 고른다.
+  function pickTargets() {
+    const { size, cells } = analysis;
+    const pool = cells.slice(0, Math.max(30, Math.round(cells.length * .35)));
+    for (let i = pool.length - 1; i > 0; i--) { const j = randomInt(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    for (const gap of [3, 2, 1.2]) {
+      const chosen = [];
+      for (const c of pool) {
+        if (chosen.every(o => Math.hypot(o.cx - c.cx, o.cy - c.cy) >= size * gap)) chosen.push(c);
+        if (chosen.length === ROUNDS) return chosen;
+      }
+    }
+    const fallback = [];
+    for (const c of cells) {
+      if (fallback.every(o => Math.hypot(o.cx - c.cx, o.cy - c.cy) >= size)) fallback.push(c);
+      if (fallback.length === ROUNDS) break;
+    }
+    return fallback;
+  }
+
+  function sampleImage() {
+    const c = document.createElement('canvas');
+    c.width = 1600; c.height = 1200;
+    const x = c.getContext('2d');
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = x.createLinearGradient(0, 0, 0, 700);
+    sky.addColorStop(0, '#5aa7d8'); sky.addColorStop(1, '#f3d7a7');
+    x.fillStyle = sky; x.fillRect(0, 0, 1600, 1200);
+    x.fillStyle = '#fff3c4'; x.beginPath(); x.arc(1280, 200, 90, 0, Math.PI * 2); x.fill();
+    for (let i = 0; i < 9; i++) {
+      x.fillStyle = 'rgba(255,255,255,.8)';
+      const cx = rnd() * 1600, cy = 60 + rnd() * 260;
+      for (let j = 0; j < 4; j++) { x.beginPath(); x.arc(cx + j * 32, cy + (j % 2) * 12, 26 + rnd() * 16, 0, Math.PI * 2); x.fill(); }
+    }
+    const colors = ['#c8452d', '#3a6ea5', '#e2a03f', '#5b8c5a', '#7d4e8c', '#d97a7a', '#4a4e69', '#2a9d8f'];
+    for (let bx = 0; bx < 1600;) {
+      const bw = 110 + rnd() * 120, bh = 260 + rnd() * 420, top = 900 - bh;
+      x.fillStyle = colors[Math.floor(rnd() * colors.length)];
+      x.fillRect(bx, top, bw, bh + 10);
+      for (let wy = top + 20; wy < 860; wy += 46) {
+        for (let wx = bx + 14; wx < bx + bw - 28; wx += 34) {
+          x.fillStyle = rnd() < .35 ? '#ffe9a8' : rnd() < .5 ? '#2b2620' : '#9cc3de';
+          x.fillRect(wx, wy, 20, 26);
+        }
+      }
+      bx += bw + 6 + rnd() * 20;
+    }
+    x.fillStyle = '#4c4a45'; x.fillRect(0, 900, 1600, 300);
+    x.fillStyle = '#f5efe4';
+    for (let i = 0; i < 1600; i += 120) x.fillRect(i, 1040, 70, 12);
+    for (let i = 0; i < 14; i++) {
+      const tx = rnd() * 1600, ty = 930 + rnd() * 80;
+      x.fillStyle = '#6b4a2b'; x.fillRect(tx - 6, ty, 12, 60);
+      x.fillStyle = ['#3f7d3a', '#5f9e4a', '#2e5e3a'][i % 3];
+      x.beginPath(); x.arc(tx, ty, 30 + rnd() * 18, 0, Math.PI * 2); x.fill();
+    }
+    for (let i = 0; i < 7; i++) {
+      const cx = rnd() * 1450, cy = 1110 + rnd() * 50;
+      x.fillStyle = colors[i % colors.length]; x.fillRect(cx, cy - 34, 130, 40);
+      x.fillStyle = '#cfe3f2'; x.fillRect(cx + 22, cy - 56, 80, 24);
+      x.fillStyle = '#1d1b19';
+      x.beginPath(); x.arc(cx + 28, cy + 8, 14, 0, Math.PI * 2); x.arc(cx + 104, cy + 8, 14, 0, Math.PI * 2); x.fill();
+    }
+    return c;
+  }
+
+  /* ---------- 카메라 ---------- */
+  const video = $('video');
+  let stream = null, facing = 'environment', cameraRequest = 0;
+  function stopCamera() {
+    cameraRequest++;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    video.srcObject = null;
+    $('shutter').disabled = true;
+  }
+  function cameraMessage(text, offerNative) {
+    const box = $('cameraMsg');
+    box.hidden = false;
+    box.textContent = '';
+    const p = document.createElement('div');
+    p.textContent = text;
+    box.append(p);
+    if (offerNative) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.style.color = 'var(--ink)';
+      b.textContent = '기기 카메라 앱으로 촬영';
+      b.onclick = () => $('captureInput').click();
+      box.append(b);
+    }
+  }
+  async function startCamera() {
+    stopCamera();
+    const request = cameraRequest;
+    show('camera');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraMessage('이 주소에서는 브라우저가 카메라를 막습니다. HTTPS 주소로 열어 주세요.', true);
+      return;
+    }
+    cameraMessage('카메라를 켜는 중입니다. 권한 요청이 뜨면 허용해 주세요.');
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } } });
+      if (request !== cameraRequest) { s.getTracks().forEach(t => t.stop()); return; }
+      stream = s;
+      video.srcObject = s;
+      await video.play();
+      if (request !== cameraRequest) return;
+      const actual = s.getVideoTracks()[0].getSettings().facingMode;
+      video.classList.toggle('mirror', actual ? actual === 'user' : facing === 'user');
+      $('cameraMsg').hidden = true;
+      $('shutter').disabled = false;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      $('switchCamera').hidden = devices.filter(d => d.kind === 'videoinput').length < 2;
+    } catch (err) {
+      if (request !== cameraRequest) return;
+      const messages = {
+        NotAllowedError: '카메라 권한이 거부되었습니다. 주소창의 사이트 설정에서 허용해 주세요.',
+        NotFoundError: '사용할 수 있는 카메라를 찾지 못했습니다.',
+        NotReadableError: '다른 프로그램이 카메라를 사용 중입니다. 그 프로그램을 닫고 다시 시도해 주세요.'
+      };
+      cameraMessage(messages[err.name] || '카메라를 시작하지 못했습니다.', true);
+    }
+  }
+  function capture() {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h) return;
+    useImage(toCanvas(video, w, h, video.classList.contains('mirror')));
+  }
+
+  /* ---------- 원본 보기 (확대, 이동, 표시) ---------- */
+  const view = $('view'), viewCtx = view.getContext('2d');
+  const vs = { w: 0, h: 0, dpr: 1, fit: 1, scale: 1, tx: 0, ty: 0 };
+  let marker = null, reveal = null;
+
+  function resizeView() {
+    const r = $('viewer').getBoundingClientRect();
+    if (!r.width || !r.height || !image) return;
+    vs.dpr = Math.min(2, window.devicePixelRatio || 1);
+    vs.w = r.width; vs.h = r.height;
+    view.width = Math.round(r.width * vs.dpr);
+    view.height = Math.round(r.height * vs.dpr);
+    fitView();
+  }
+  function fitView() {
+    vs.fit = Math.min(vs.w / image.width, vs.h / image.height);
+    vs.scale = vs.fit;
+    clampView();
+    drawView();
+  }
+  function clampView() {
+    const maxScale = Math.max(vs.fit * 10, 2);
+    vs.scale = Math.min(maxScale, Math.max(vs.fit, vs.scale));
+    const iw = image.width * vs.scale, ih = image.height * vs.scale;
+    vs.tx = iw <= vs.w ? (vs.w - iw) / 2 : Math.min(0, Math.max(vs.w - iw, vs.tx));
+    vs.ty = ih <= vs.h ? (vs.h - ih) / 2 : Math.min(0, Math.max(vs.h - ih, vs.ty));
+  }
+  function zoomAt(x, y, factor) {
+    const ix = (x - vs.tx) / vs.scale, iy = (y - vs.ty) / vs.scale;
+    vs.scale *= factor;
+    clampView();
+    vs.tx = x - ix * vs.scale;
+    vs.ty = y - iy * vs.scale;
+    clampView();
+    drawView();
+  }
+  function drawView() {
+    if (!image || !vs.w) return;
+    const ctx = viewCtx;
+    ctx.setTransform(vs.dpr, 0, 0, vs.dpr, 0, 0);
+    ctx.fillStyle = '#241e18';
+    ctx.fillRect(0, 0, vs.w, vs.h);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, vs.tx, vs.ty, image.width * vs.scale, image.height * vs.scale);
+    const toScreen = (ix, iy) => [vs.tx + ix * vs.scale, vs.ty + iy * vs.scale];
+    if (reveal) {
+      const [x, y] = toScreen(reveal.cx - reveal.size / 2, reveal.cy - reveal.size / 2);
+      const s = reveal.size * vs.scale;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeRect(x, y, s, s);
+      ctx.lineWidth = 3; ctx.strokeStyle = '#4cd964'; ctx.strokeRect(x, y, s, s);
+    }
+    if (marker) {
+      const [x, y] = toScreen(marker.x, marker.y);
+      const color = reveal ? (reveal.ok ? '#4cd964' : '#ff5a3c') : '#fff';
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+      ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 3; ctx.strokeStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  const pointers = new Map();
+  let gesture = null;
+  const local = e => { const r = view.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  view.addEventListener('pointerdown', e => {
+    view.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, local(e));
+    if (pointers.size === 1) {
+      const p = local(e);
+      gesture = { type: 'tap', start: p, last: p };
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      gesture = { type: 'pinch', dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, scale: vs.scale,
+        ix: (mid.x - vs.tx) / vs.scale, iy: (mid.y - vs.ty) / vs.scale };
+    }
+  });
+  view.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId) || !gesture) return;
+    const p = local(e);
+    pointers.set(e.pointerId, p);
+    if (gesture.type === 'pinch' && pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      vs.scale = gesture.scale * (Math.hypot(a.x - b.x, a.y - b.y) || 1) / gesture.dist;
+      clampView();
+      vs.tx = mid.x - gesture.ix * vs.scale;
+      vs.ty = mid.y - gesture.iy * vs.scale;
+      clampView();
+      drawView();
+    } else if (gesture.type !== 'pinch') {
+      if (gesture.type === 'tap' && Math.hypot(p.x - gesture.start.x, p.y - gesture.start.y) > 8) {
+        gesture.type = 'pan';
+        view.classList.add('panning');
+      }
+      if (gesture.type === 'pan') {
+        vs.tx += p.x - gesture.last.x;
+        vs.ty += p.y - gesture.last.y;
+        clampView();
+        drawView();
+      }
+      gesture.last = p;
+    }
+  });
+  function endPointer(e, cancelled) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    view.classList.remove('panning');
+    if (gesture && gesture.type === 'tap' && !cancelled) placeMarker(gesture.start);
+    if (pointers.size === 0) gesture = null;
+    else if (gesture && gesture.type === 'pinch') gesture = { type: 'done' };
+  }
+  view.addEventListener('pointerup', e => endPointer(e, false));
+  view.addEventListener('pointercancel', e => endPointer(e, true));
+  view.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = local(e);
+    zoomAt(p.x, p.y, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }, { passive: false });
+  $('zoomIn').onclick = () => zoomAt(vs.w / 2, vs.h / 2, 1.5);
+  $('zoomOut').onclick = () => zoomAt(vs.w / 2, vs.h / 2, 1 / 1.5);
+  $('zoomFit').onclick = fitView;
+  new ResizeObserver(() => { if (current === 'play') resizeView(); }).observe($('viewer'));
+
+  function placeMarker(p) {
+    if (game.answered) return;
+    const x = (p.x - vs.tx) / vs.scale, y = (p.y - vs.ty) / vs.scale;
+    if (x < 0 || y < 0 || x > image.width || y > image.height) return;
+    marker = { x, y };
+    $('actionBtn').disabled = false;
+    $('prompt').className = 'prompt';
+    $('prompt').textContent = '표시한 곳이 맞으면 확인을 누르세요.';
+    drawView();
+  }
+
+  /* ---------- 게임 진행 ---------- */
+  const game = { targets: [], index: 0, level: 0, score: 0, answered: false, started: 0, timer: null, results: [] };
+  const fragCtx = $('frag').getContext('2d');
+
+  function regionFor(t, level) {
+    const size = Math.min(analysis.size * 2 ** level, image.width, image.height);
+    const x = Math.min(image.width - size, Math.max(0, t.cx - size / 2));
+    const y = Math.min(image.height - size, Math.max(0, t.cy - size / 2));
+    return { x, y, size };
+  }
+  function drawFragment(ctx, t, level) {
+    const r = regionFor(t, level), out = ctx.canvas.width;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, r.x, r.y, r.size, r.size, 0, 0, out, out);
+  }
+
+  function startGame() {
+    game.targets = pickTargets();
+    Object.assign(game, { index: 0, score: 0, results: [], started: performance.now() });
+    show('play');
+    stopTimer();
+    game.timer = setInterval(updateHud, 500);
+    showRound();
+  }
+
+  function showRound() {
+    game.level = 0;
+    game.answered = false;
+    marker = null;
+    reveal = null;
+    renderFragment();
+    $('prompt').className = 'prompt';
+    $('prompt').textContent = '원본에서 이 조각이 있는 곳을 누르세요.';
+    $('actionBtn').textContent = '확인';
+    $('actionBtn').disabled = true;
+    if (vs.w) fitView();
+    updateHud();
+  }
+
+  function renderFragment() {
+    drawFragment(fragCtx, game.targets[game.index], game.level);
+    const zoom = Math.max(1, Math.round(Math.min(image.width, image.height) / regionFor(game.targets[game.index], game.level).size));
+    $('zoomTag').textContent = `약 ${zoom}배 확대`;
+    const left = HINTS - game.level;
+    $('hintBtn').textContent = left ? `힌트 (${left}번 남음, -1점)` : '힌트를 다 썼어요';
+    $('hintBtn').disabled = game.answered || left === 0;
+  }
+
+  function useHint() {
+    if (game.answered || game.level >= HINTS) return;
+    game.level++;
+    renderFragment();
+  }
+
+  function answer() {
+    if (!marker || game.answered) return;
+    const t = game.targets[game.index], half = analysis.size / 2;
+    const ok = Math.abs(marker.x - t.cx) <= half && Math.abs(marker.y - t.cy) <= half;
+    const points = ok ? 3 - game.level : 0;
+    game.score += points;
+    game.answered = true;
+    reveal = { cx: t.cx, cy: t.cy, size: analysis.size, ok };
+    const small = document.createElement('canvas');
+    small.width = small.height = 160;
+    drawFragment(small.getContext('2d'), t, 0);
+    game.results.push({ ok, points, hints: game.level, img: small.toDataURL('image/jpeg', .8) });
+    $('prompt').className = 'prompt ' + (ok ? 'good' : 'bad');
+    $('prompt').textContent = ok ? `정답! +${points}점` : '아쉬워요. 초록 네모가 정답 위치입니다.';
+    renderFragment();
+    // 정답이 화면 밖에 있으면 보이도록 옮긴다.
+    const sx = vs.tx + t.cx * vs.scale, sy = vs.ty + t.cy * vs.scale;
+    if (sx < 0 || sy < 0 || sx > vs.w || sy > vs.h) { vs.tx += vs.w / 2 - sx; vs.ty += vs.h / 2 - sy; clampView(); }
+    drawView();
+    $('actionBtn').textContent = game.index === game.targets.length - 1 ? '결과 보기' : '다음 문제';
+    updateHud();
+  }
+
+  function next() {
+    if (game.index === game.targets.length - 1) { finish(); return; }
+    game.index++;
+    showRound();
+  }
+
+  function updateHud() {
+    $('round').textContent = `${game.index + 1} / ${game.targets.length}`;
+    $('score').textContent = game.score;
+    $('time').textContent = formatTime(performance.now() - game.started);
+  }
+  function stopTimer() { clearInterval(game.timer); game.timer = null; }
+
+  function readBest() {
+    try { return JSON.parse(localStorage.getItem('zoom-hunt-best')) || null; } catch { return null; }
+  }
+
+  function finish() {
+    const time = performance.now() - game.started, max = game.targets.length * 3;
+    stopTimer();
+    const old = readBest();
+    const better = !old || game.score > old.score || (game.score === old.score && time < old.time);
+    if (better) { try { localStorage.setItem('zoom-hunt-best', JSON.stringify({ score: game.score, max, time })); } catch { /* 저장 불가 환경 */ } }
+    const hits = game.results.filter(r => r.ok).length;
+    $('finalScore').innerHTML = `${game.score}<small> / ${max}</small>`;
+    $('summary').textContent = `${game.targets.length}곳 중 ${hits}곳 찾음 · ${formatTime(time)}`;
+    $('record').textContent = better ? '새 최고 기록입니다' : `최고 기록: ${old.score} / ${old.max}, ${formatTime(old.time)}`;
+    drawMap();
+    const list = $('review');
+    list.textContent = '';
+    game.results.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<img alt="${i + 1}번 조각"><span class="${r.ok ? 'ok' : 'no'}"></span>`;
+      li.querySelector('img').src = r.img;
+      li.querySelector('span').textContent = `${i + 1}. ${r.ok ? `+${r.points}점` : '못 찾음'}`;
+      list.append(li);
+    });
+    show('result');
+  }
+
+  function drawMap() {
+    const map = $('map'), k = Math.min(1, 1200 / Math.max(image.width, image.height));
+    map.width = Math.round(image.width * k); map.height = Math.round(image.height * k);
+    const ctx = map.getContext('2d');
+    ctx.drawImage(image, 0, 0, map.width, map.height);
+    const s = analysis.size * k;
+    ctx.font = `800 ${Math.max(16, Math.round(s * .45))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    game.targets.forEach((t, i) => {
+      const x = t.cx * k - s / 2, y = t.cy * k - s / 2, color = game.results[i].ok ? '#4cd964' : '#ff5a3c';
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeRect(x, y, s, s);
+      ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.strokeRect(x, y, s, s);
+      const lx = x + s / 2, ly = y - s * .45 < 14 ? y + s + s * .4 : y - s * .4;
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(String(i + 1), lx, ly);
+      ctx.fillStyle = color; ctx.fillText(String(i + 1), lx, ly);
+    });
+  }
+
+  /* ---------- 이벤트 ---------- */
+  const onFile = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+  $('fileInput').addEventListener('change', onFile);
+  $('captureInput').addEventListener('change', onFile);
+  $('openFile').onclick = () => $('fileInput').click();
+  $('openCamera').onclick = startCamera;
+  $('sampleBtn').onclick = () => useImage(sampleImage());
+  $('cameraBack').onclick = () => show('setup');
+  $('shutter').onclick = capture;
+  $('switchCamera').onclick = () => { facing = facing === 'user' ? 'environment' : 'user'; startCamera(); };
+  $('hintBtn').onclick = useHint;
+  $('actionBtn').onclick = () => (game.answered ? next() : answer());
+  $('againBtn').onclick = startGame;
+  $('newPhotoBtn').onclick = () => show('setup');
+
+  let dragDepth = 0;
+  addEventListener('dragenter', e => { e.preventDefault(); if (current === 'setup') { dragDepth++; document.body.classList.add('dragging'); } });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+  addEventListener('drop', e => {
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove('dragging');
+    if (current === 'setup') loadFile(e.dataTransfer.files[0]);
+  });
+  addEventListener('paste', e => {
+    if (current !== 'setup') return;
+    const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+    if (item) loadFile(item.getAsFile());
+  });
+})();
+</script>
+</body>
+</html>
