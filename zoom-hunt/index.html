@@ -203,7 +203,7 @@
   const $ = id => document.getElementById(id);
   const ROUNDS = 5, MAX_SIDE = 2048, HINTS = 2;
   // 확대 배율 = 원본 짧은 변 ÷ 조각 한 변. 배율이 클수록 조각과 정답 영역이 작아진다.
-  const LEVELS = { low: { name: '하', zoom: 13 }, high: { name: '상', zoom: 18 } };
+  const LEVELS = { low: { name: '쉬움', zoom: 13 }, high: { name: '어려움', zoom: 18 } };
   let level = 'low';
   const screens = ['setup', 'camera', 'play', 'result'];
   let current = 'setup', toastTimer, image = null, analysis = null;
@@ -738,7 +738,7 @@
   }
   function stopTimer() { clearInterval(game.timer); game.timer = null; }
 
-  // 난이도 추가 전 기록('zoom-hunt-best')은 13배 기준이므로 '하' 기록으로 이어 쓴다.
+  // 난이도 추가 전 기록('zoom-hunt-best')은 13배 기준이므로 '쉬움' 기록으로 이어 쓴다.
   function readBest(lv) {
     try {
       return JSON.parse(localStorage.getItem(`zoom-hunt-best-${lv}`)
